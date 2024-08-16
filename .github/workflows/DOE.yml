@@ -1,0 +1,111 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+      # Retrieves the source code from the repository.
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '14'
+      # Configures the Node.js environment with version 14.
+
+    - name: Install dependencies
+      run: npm install
+      # Installs project dependencies listed in package.json.
+
+    - name: Build
+      run: npm run build
+      # Compiles the source code and generates build artifacts.
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: build
+        path: ./build
+      # Uploads the build artifacts to GitHub Actions so they can be used in subsequent steps.
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+    # This job depends on the successful completion of the 'build' job.
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '14'
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Run unit tests
+      run: npm test
+      # Executes unit tests to ensure code quality.
+
+    - name: Run code analysis
+      run: npm run lint
+      # Performs code quality checks (e.g., linting) to identify potential issues.
+
+    - name: Upload test results
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-results
+        path: ./test-results
+      # Uploads test results for review.
+
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    needs: test
+    if: success()
+    # This job depends on the successful completion of the 'test' job and runs only if tests pass.
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v3
+
+    - name: Deploy to staging
+      run: |
+        echo "Deploying to staging environment..."
+        ./deploy.sh
+      # Runs a deployment script to deploy the application to a staging environment.
+
+  notify:
+    name: Notify
+    runs-on: ubuntu-latest
+    needs: [build, test, deploy]
+    if: failure()
+    # This job runs only if any of the previous jobs (build, test, deploy) fail.
+
+    steps:
+    - name: Send Slack notification
+      uses: rtCamp/action-slack-notify@v2
+      with:
+        status: failure
+        fields: >
+          {
+            "title": "CI/CD Pipeline Status",
+            "text": "Build or Deployment failed. Please check the logs for details."
+          }
+        slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+      # Sends a Slack notification about the failure to a specified Slack channel using a webhook URL.
+
